@@ -8,7 +8,9 @@ description = {
    license = "MIT"
 }
 dependencies = {
-   "telegram-bot-lua"
+   "telegram-bot-lua",
+   "pgmoon",
+   "luaossl"
 }
 build = {
    type = "builtin",
