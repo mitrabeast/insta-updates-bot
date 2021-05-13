@@ -41,4 +41,12 @@ function utils.tabletostring(tbl)
    return "{"..table.concat(result, ",").."}"
 end
 
+function utils.split(str)
+   local splitted = {}
+   for i in str:gmatch("([^,%s]+)") do
+      splitted[#splitted + 1] = i
+   end
+   return splitted
+end
+
 return utils

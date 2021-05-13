@@ -73,9 +73,11 @@ function TelegramBot:_on_message(message)
     elseif utils.starts_with(message.text, "/list") then
         self:_on_list_command(message.chat.id)
     elseif utils.starts_with(message.text, "/add") then
-        self:_on_add_command(message.chat.id)
+        local username = utils.split(message.text)[2]
+        self:_on_add_command(message.chat.id, username)
     elseif utils.starts_with(message.text, "/remove") then
-        self:_on_remove_command(message.chat.id)
+        local username = utils.split(message.text)[2]
+        self:_on_remove_command(message.chat.id, username)
     elseif utils.starts_with(message.text, "/help") then
         self:_on_help_command(message.chat.id)
     else
@@ -92,8 +94,10 @@ function TelegramBot:_on_start_command(chat_id, username)
     else
         log.info("Registering user "..username)
         self._user_repo:create({chat_id = chat_id, username = username})
-        self._api.send_message(chat_id, "Hello, "..username.."! "
-        .."Send me /add igusername to observe igusername's Instagram updates.")
+        self._api.send_message(
+            chat_id,
+            "Hello, "..username.."! Send me /add igusername to observe igusername's Instagram updates."
+        )
     end
 end
 
@@ -110,15 +114,59 @@ end
 
 function TelegramBot:_on_list_command(chat_id)
     log.debug("Command /list from "..chat_id)
-    self._api.send_message(chat_id, chat_id)
+    local accounts = self._accounts_repo:retrieve({chat_id = chat_id})
+    if accounts then
+        local account_links = {}
+        for _, account in pairs(accounts) do
+            table.insert(account_links, self._instagram_service.instagram_url.."/"..account.username.."/")
+        end
+        log.info("List of observable Instagram accounts: "..utils.tabletostring(account_links))
+        self._api.send_message(chat_id, "Observing:\n"..table.concat(account_links, "\n"))
+    else
+        self._api.send_message(
+            chat_id,
+            "You are not subscribed to any Instagram account. "..
+            "Provide one using /add igusername command."
+        )
+    end
 end
 
 function TelegramBot:_on_add_command(chat_id, username)
-    self._api.send_message(chat_id, chat_id)
+    log.debug("Command /add "..username.." from "..chat_id)
+    if not username then
+        self._api.send_message(chat_id, "No username parameter provided. Use /add igusername format.")
+        return
+    end
+    local account = self._accounts_repo:retrieve({chat_id = chat_id, username = username})
+    if account then
+        log.warn("Trying to add already observable account @"..username.." for chat "..chat_id)
+        self._api.send_message(chat_id, "This account is already observable for this chat.")
+    else
+        -- TODO: check if username is correct
+        log.info("Adding @"..username.." to observable accounts list for chat "..chat_id)
+        self._accounts_repo:create({chat_id = chat_id, username = username})
+        self._api.send_message(chat_id, "Account "..self._instagram_service.instagram_url.."/"..username.."/ added.")
+    end
 end
 
 function TelegramBot:_on_remove_command(chat_id, username)
-    self._api.send_message(chat_id, chat_id)
+    log.debug("Command /remove "..username.." from "..chat_id)
+    if not username then
+        self._api.send_message(chat_id, "No username parameter provided. Use /remove igusername format.")
+        return
+    end
+    local account = self._accounts_repo:retrieve({chat_id = chat_id, username = username})
+    if account then
+        log.info("Removing @"..username.." from observable accounts list for chat "..chat_id)
+        self._accounts_repo:delete({chat_id = chat_id, username = username})
+        self._api.send_message(
+            chat_id,
+            "Removed "..self._instagram_service.instagram_url.."/"..username.."/ from observable list."
+        )
+    else
+        log.warn("Trying to remove not observable account @"..username.." for chat "..chat_id)
+        self._api.send_message(chat_id, "This account is not observable for this chat.")
+    end
 end
 
 function TelegramBot:_on_help_command(chat_id)

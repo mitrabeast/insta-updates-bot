@@ -56,9 +56,9 @@ end
 function Storage:close()
     if self._database then
         self._database:disconnect()
-        log.info("Disconnected from " .. self._name .. " database.")
+        log.info("Disconnected from "..self._name.." database.")
     else
-        log.error("No database object, or not connected to " .. self._name "!")
+        log.error("No database object, or not connected to "..self._name.."!")
     end
 end
 
