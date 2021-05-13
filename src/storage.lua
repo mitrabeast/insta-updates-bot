@@ -18,11 +18,12 @@ local function _connect(config)
         password = config._password,
         ssl = true
     })
+    log.debug("Connecting to "..config._host..":"..config._port.."/"..config._name.." database...")
     local success, error = database:connect()
     if success then
-        log.info("Connected to database " .. config._name .. " successfuly.")
+        log.info("Connected to database "..config._name.." successfuly.")
     else
-        log.error("Error connecting to database: " .. error)
+        log.error("Error connecting to database "..config._name..": "..error)
     end
     return database
 end
@@ -39,6 +40,15 @@ function Storage:new(config)
     setmetatable(object, self)
     self.__index = self
     return object
+end
+
+function Storage:close()
+    if self._database then
+        self._database:disconnect()
+        log.info("Disconnected from " .. self._name .. " database.")
+    else
+        log.error("No database object, or not connected to " .. self._name "!")
+    end
 end
 
 return Storage

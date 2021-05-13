@@ -5,4 +5,8 @@ function utils.wait(seconds)
     repeat until os.time() > start + seconds
 end
 
+function utils.starts_with(str, start)
+    return str:sub(1, #start) == start
+end
+
 return utils
