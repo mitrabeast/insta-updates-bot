@@ -1,3 +1,5 @@
+local utils = require "src/utils"
+
 local _M = {}
 
 local Repository = {
@@ -31,16 +33,49 @@ end
 
 local UserRepository = Repository:new()
 
-function UserRepository:create()
-    print()
+function UserRepository:create(params)
+    if type(params) ~= "table" or not params.chat_id then return nil end
+    local chat_id = params.chat_id
+    local username = params.username or "Anonymous"
+    local result, err = self._storage:query(
+        "insert into tgusers (chat_id, username) values (%s, %s)",
+        {chat_id, username}
+    )
+    if result then
+        log.debug("Created user "..username.." from chat "..chat_id)
+    else
+        log.error("Error creating user "..username.." from chat "..chat_id.." : "..err)
+    end
 end
 
-function UserRepository:retrieve()
-    error("Abstract method.")
+function UserRepository:retrieve(params)
+    if type(params) ~= "table" or not params.chat_id then return nil end
+    local chat_id = params.chat_id
+    local result, err = self._storage:query(
+        "select * from tgusers where chat_id=%s",
+        {chat_id}
+    )
+    if result then
+        log.debug("Retrieved user "..utils.tabletostring(result).." by chat id "..chat_id)
+        if next(result) == nil then return nil else return result end
+    else
+        log.error("Error retrieving user by chat id "..chat_id..": "..err)
+        return nil
+    end
 end
 
-function UserRepository:delete()
-    error("Abstract method.")
+function UserRepository:delete(params)
+    if type(params) ~= "table" or not params.chat_id then return nil end
+    local chat_id = params.chat_id
+    local result, err = self._storage:query(
+        "delete from tgusers where chat_id=%s",
+        {chat_id}
+    )
+    if result then
+        log.debug("Deleted user by chat id "..chat_id)
+    else
+        log.error("Error deleting user by chat id "..chat_id..": "..err)
+    end
 end
 
 local AccountsRepository = Repository:new()

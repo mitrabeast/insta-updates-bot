@@ -42,6 +42,17 @@ function Storage:new(config)
     return object
 end
 
+function Storage:query(query, params)
+    local escaped_params = {}
+    for _, value in pairs(params) do
+        local escaped_param = self._database:escape_literal(tostring(value))
+        table.insert(escaped_params, escaped_param)
+    end
+    local formatted_query = string.format(query, table.unpack(escaped_params))
+    log.debug("Executing query: "..formatted_query)
+    return self._database:query(formatted_query)
+end
+
 function Storage:close()
     if self._database then
         self._database:disconnect()

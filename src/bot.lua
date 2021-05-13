@@ -66,7 +66,8 @@ end
 function TelegramBot:_on_message(message)
     if not message or not message.text then return end
     if utils.starts_with(message.text, "/start") then
-        self:_on_start_command(message.chat.id)
+        local username = message.from.first_name.." "..message.from.last_name
+        self:_on_start_command(message.chat.id, username)
     elseif utils.starts_with(message.text, "/stop") then
         self:_on_stop_command(message.chat.id)
     elseif utils.starts_with(message.text, "/list") then
@@ -83,28 +84,55 @@ function TelegramBot:_on_message(message)
     end
 end
 
-function TelegramBot:_on_start_command(chat_id)
-    self._api.send_message(chat_id, chat_id)
+function TelegramBot:_on_start_command(chat_id, username)
+    log.debug("Command /start from "..chat_id)
+    local user = self._user_repo:retrieve({chat_id = chat_id})
+    if user then
+        self._api.send_message(chat_id, "You have been already registered!")
+    else
+        log.info("Registering user "..username)
+        self._user_repo:create({chat_id = chat_id, username = username})
+        self._api.send_message(chat_id, "Hello, "..username.."! "
+        .."Send me /add igusername to observe igusername's Instagram updates.")
+    end
 end
 
 function TelegramBot:_on_stop_command(chat_id)
-    self._api.send_message(chat_id, chat_id)
+    log.debug("Command /stop from "..chat_id)
+    local user = self._user_repo:retrieve({chat_id = chat_id})
+    if user then
+        log.info("Deleting user by chat id "..chat_id)
+        self._user_repo:delete({chat_id = chat_id})
+    else
+        log.warn("Trying to delete user data from chat"..chat_id..", but no user data exists.")
+    end
 end
 
 function TelegramBot:_on_list_command(chat_id)
+    log.debug("Command /list from "..chat_id)
     self._api.send_message(chat_id, chat_id)
 end
 
-function TelegramBot:_on_add_command(chat_id)
+function TelegramBot:_on_add_command(chat_id, username)
     self._api.send_message(chat_id, chat_id)
 end
 
-function TelegramBot:_on_remove_command(chat_id)
+function TelegramBot:_on_remove_command(chat_id, username)
     self._api.send_message(chat_id, chat_id)
 end
 
 function TelegramBot:_on_help_command(chat_id)
-    self._api.send_message(chat_id, chat_id)
+    log.debug("Command /help from "..chat_id)
+    self._api.send_message(
+        chat_id,
+        "Use one of the specified commands:\n"..
+        "/start - Register in Instagram updates observer bot.\n"..
+        "/stop - Delete all user data and stop the bot.\n"..
+        "/list - Show all observable Instagram accounts.\n"..
+        "/add igusername - Begin observing igusername's Instagram account.\n"..
+        "/remove igusername - Stop observing igusername's Instagram account.\n"..
+        "/help - Show this message."
+    )
 end
 
 return TelegramBot

@@ -3,7 +3,7 @@ local _M = {}
 local InstagramService = {
     _website = "https://instasaved.net",
     _photos_url = "/save-profile-posts",
-    _stories_url = "",
+    _stories_url = "/",
     _photos_type = "profile",
     _stories_type = "story"
 }
