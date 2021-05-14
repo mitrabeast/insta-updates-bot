@@ -126,35 +126,45 @@ end
 local PhotosRepository = Repository:new()
 
 function PhotosRepository:create(params)
-    if type(params) ~= "table" or not params.chat_id then return nil end
+    if type(params) ~= "table" or not params.chat_id or params.username then return nil end
     local chat_id = params.chat_id
+    local username = params.username
     local photo_date = params.photo_date
     local url = params.url
     local result, err = self._storage:query(
-        "insert into igphotos (tguser_id, photo_date, url) values (%s, %s, %s)",
-        {chat_id, photo_date, url}
+        "insert into igphotos (tguser_id, photo_date, url, username) values (%s, %s, %s, %s)",
+        {chat_id, photo_date, url, username}
     )
     if result then
-        log.debug("Added Instagram photo "..url.." for user "..chat_id)
+        log.debug("Added Instagram photo "..url.." for user "..username)
     else
-        log.error("Error adding Instagram photo "..url.." for user "..chat_id.." : "..err)
+        log.error("Error adding Instagram photo "..url.." for user "..username.." : "..err)
     end
 end
 
 function PhotosRepository:retrieve(params)
-    if type(params) ~= "table" or not params.chat_id then return nil end
+    if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
     local chat_id = params.chat_id
+    local username = params.username
+    local photo_date = params.photo_date
     local page = params.page or 1
     local page_size = params.page_size or 10
-    local result, err = self._storage:query(
-        "select * from igphotos where chat_id=%s order by photo_date desc limit %d offset %d",
-        {chat_id, page_size, page}
-    )
+    local query_config = {
+        "select * from igphotos where chat_id=%s and username=%s order by photo_date desc limit %d offset %d",
+        {chat_id, username, page_size, page}
+    }
+    if photo_date then
+        query_config = {
+            "select * from igphotos where chat_id=%s and username=%s and photo_date=%s",
+            {chat_id, username, photo_date}
+        }
+    end
+    local result, err = self._storage:query(table.unpack(query_config))
     if result then
-        log.debug("Retrieved Instagram photos: "..utils.tabletostring(result).." by chat id "..chat_id)
+        log.debug("Retrieved Instagram photos: "..utils.tabletostring(result).." by chat id "..username)
         if next(result) == nil then return nil else return result end
     else
-        log.error("Error retrieving Instagram photos by chat id "..chat_id..": "..err)
+        log.error("Error retrieving Instagram photos by chat id "..username..": "..err)
         return nil
     end
 end
@@ -162,35 +172,45 @@ end
 local StoriesRepository = Repository:new()
 
 function StoriesRepository:create(params)
-    if type(params) ~= "table" or not params.chat_id then return nil end
+    if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
     local chat_id = params.chat_id
+    local username = params.username
     local story_date = params.story_date
     local url = params.url
     local result, err = self._storage:query(
-        "insert into igstories (tguser_id, story_date, url) values (%s, %s, %s)",
-        {chat_id, story_date, url}
+        "insert into igstories (tguser_id, story_date, url, username) values (%s, %s, %s, %s)",
+        {chat_id, story_date, url, username}
     )
     if result then
-        log.debug("Added Instagram story "..url.." for user "..chat_id)
+        log.debug("Added Instagram story "..url.." for user "..username)
     else
-        log.error("Error adding Instagram story "..url.." for user "..chat_id.." : "..err)
+        log.error("Error adding Instagram story "..url.." for user "..username.." : "..err)
     end
 end
 
 function StoriesRepository:retrieve(params)
-    if type(params) ~= "table" or not params.chat_id then return nil end
+    if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
     local chat_id = params.chat_id
+    local username = params.username
+    local url = params.url
     local page = params.page or 1
     local page_size = params.page_size or 10
-    local result, err = self._storage:query(
-        "select * from igstories where chat_id=%s order by story_date desc limit %d offset %d",
-        {chat_id, page_size, page}
-    )
+    local query_config = {
+        "select * from igstories where chat_id=%s and username=%s order by story_date desc limit %d offset %d",
+        {chat_id, username, page_size, page}
+    }
+    if url then
+        query_config = {
+            "select * from igstories where chat_id=%s and username=%s and url=%s",
+            {chat_id, username, url}
+        }
+    end
+    local result, err = self._storage:query(table.unpack(query_config))
     if result then
         log.debug("Retrieved Instagram stories: "..utils.tabletostring(result).." by chat id "..chat_id)
         if next(result) == nil then return nil else return result end
     else
-        log.error("Error retrieving Instagram stories by chat id "..chat_id..": "..err)
+        log.error("Error retrieving Instagram stories by chat id "..chat_id.." and username"..username..": "..err)
         return nil
     end
 end

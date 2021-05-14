@@ -57,12 +57,14 @@ function InstagramService:get_photos(username)
         if photo.node.taken_at_timestamp and not photo.node.is_video then
             -- Add all photo urls if there are some photos in a post.
             if photo.node.edge_sidecar_to_children and photo.node.edge_sidecar_to_children.edges then
+                local photo_date = photo.node.taken_at_timestamp
                 for _, edge in pairs(photo.node.edge_sidecar_to_children.edges) do
                     if edge.node and edge.node.display_url and not edge.node.is_video then
                         table.insert(photo_urls, {
                             url = edge.node.display_url,
-                            photo_date = photo.node.taken_at_timestamp
+                            photo_date = photo_date
                         })
+                        photo_date = photo_date + 1
                     end
                 end
             -- Add one photo url if there are no more photos in a post.
@@ -197,6 +199,68 @@ function InstagramService:_api_request(request_type, username)
     return obj
 end
 
+local UpdatesService = {
+    _instagram_service = nil,
+    _photos_repo = nil,
+    _stories_repo = nil,
+}
+
+function UpdatesService:new(instagram_service, photos_repo, stories_repo)
+    local object = {}
+    object._instagram_service = instagram_service
+    object._photos_repo = photos_repo
+    object._stories_repo = stories_repo
+
+    setmetatable(object, self)
+    self.__index = self
+    return object
+end
+
+function UpdatesService:collect_photo_updates(chat_id, username)
+    local photos = {}
+    local last_photos = self._instagram_service:get_photos(username)
+    for _, last_photo in pairs(last_photos) do
+        local existing_photo = self._photos_repo:retrieve({
+            chat_id = chat_id,
+            username = username,
+            photo_date = last_photo.photo_date
+        })
+        if not existing_photo then
+            table.insert(photos, last_photo)
+            self._photos_repo:create({
+                chat_id = chat_id,
+                username = username,
+                url = last_photo.url,
+                photo_date = last_photo.photo_date
+            })
+        end
+    end
+    return photos
+end
+
+function UpdatesService:collect_story_updates(chat_id, username)
+    local stories = {}
+    local last_stories = self._instagram_service:get_stories(username)
+    for _, last_story in pairs(last_stories) do
+        local existing_story = self._stories_repo:retrieve({
+            chat_id = chat_id,
+            username = username,
+            url = last_story.url
+        })
+        if not existing_story then
+            table.insert(stories, last_story)
+            self._stories_repo:create({
+                chat_id = chat_id,
+                username = username,
+                url = last_story.url,
+                story_date = last_story.story_date
+            })
+        end
+    end
+    return stories
+end
+
 _M.InstagramService = InstagramService
+_M.UpdatesService = UpdatesService
 
 return _M

@@ -9,7 +9,8 @@ local TelegramBot = {
     _accounts_repo = nil,
     _photos_repo = nil,
     _stories_repo = nil,
-    _instagram_service = nil
+    _instagram_service = nil,
+    _updates_service = nil
 }
 
 function TelegramBot:new(token, storage)
@@ -20,6 +21,11 @@ function TelegramBot:new(token, storage)
     object._photos_repo = repositories.PhotosRepository:new(storage)
     object._stories_repo = repositories.StoriesRepository:new(storage)
     object._instagram_service = services.InstagramService:new()
+    object._updates_service = services.UpdatesService:new(
+        object._instagram_service,
+        object._photos_repo,
+        object._stories_repo
+    )
 
     setmetatable(object, self)
     self.__index = self
@@ -33,7 +39,7 @@ function TelegramBot:start()
     local process_telegram_updates = self:_get_telegram_updates_processor()
     while true do
         -- FIXME: Add coroutines to respond faster to user's commands
-        send_instagram_updates()
+        -- send_instagram_updates()
         process_telegram_updates()
     end
 end
@@ -46,6 +52,7 @@ function TelegramBot:_get_instagram_updates_sender(start_time)
             last_update_time = now
             local chat_id = "1204323514"
             local username = "olyashaasaxon"
+            -- TODO: implement
         end
     end
 end
@@ -191,6 +198,7 @@ function TelegramBot:_on_remove_command(chat_id, username)
 end
 
 function TelegramBot:_on_update_command(chat_id, username)
+    -- TODO: implement correctly
     self:_on_photos_command(chat_id, username)
     self:_on_stories_command(chat_id, username)
 end
@@ -201,21 +209,8 @@ function TelegramBot:_on_stories_command(chat_id, username)
         self._api.send_message(chat_id, "No username parameter provided. Use /stories igusername format.")
         return
     end
-    local profile_url = self._instagram_service:toprofileurl(username)
     local stories = self._instagram_service:get_stories(username)
-    if not stories or not next(stories) then
-        self._api.send_message(chat_id, "No stories for "..profile_url)
-        return
-    end
-    for _, story in pairs(stories) do
-        if story.type == "image" then
-            self._api.send_photo(chat_id, story.url, profile_url.." story")
-        elseif story.type == "video" then
-            self._api.send_video(chat_id, story.url, profile_url.." story")
-        else
-            log.warn("Wrong story type: "..story.type.." of the @"..username)
-        end
-    end
+    self:_send_stories(chat_id, username, stories)
 end
 
 function TelegramBot:_on_photos_command(chat_id, username)
@@ -224,14 +219,8 @@ function TelegramBot:_on_photos_command(chat_id, username)
         self._api.send_message(chat_id, "No username parameter provided. Use /photos igusername format.")
         return
     end
-    local profile_url = self._instagram_service:toprofileurl(username)
     local photos = self._instagram_service:get_photos(username)
-    if not photos or not next(photos) then
-        self._api.send_message(chat_id, "No photos for "..profile_url)
-    end
-    for _, photo in pairs(photos) do
-        self._api.send_photo(chat_id, photo.url, profile_url.." photo")
-    end
+    self:_send_photos(chat_id, username, photos)
 end
 
 function TelegramBot:_on_help_command(chat_id)
@@ -252,11 +241,52 @@ function TelegramBot:_on_help_command(chat_id)
 end
 
 function TelegramBot:_collect_updates(chat_id, username)
-    -- body
+    local photos = self._updates_service:collect_photo_updates(chat_id, username)
+    local stories = self._updates_service:collect_story_updates(chat_id, username)
+    return {photos = photos, stories = stories}
 end
 
-function TelegramBot:_send_updates(chat_id, updates)
-    -- body
+function TelegramBot:_send_updates(chat_id, username, updates)
+    if not updates or not next(updates) then
+        log.warn("No to send updates provided!")
+        return
+    end
+    for update_type, update in pairs(updates) do
+        if update_type == "photos" then
+            self:_send_photos(chat_id, username, update.data)
+        elseif update_type == "stories" then
+            self:_send_stories(chat_id, username, update.data)
+        else
+            log.warn("Wrong update type: "..update.type)
+        end
+    end
+end
+
+function TelegramBot:_send_photos(chat_id, username, photos)
+    local profile_url = self._instagram_service:toprofileurl(username)
+    if not photos or not next(photos) then
+        self._api.send_message(chat_id, "No photos for "..profile_url)
+    end
+    for _, photo in pairs(photos) do
+        self._api.send_photo(chat_id, photo.url, profile_url.." photo")
+    end
+end
+
+function TelegramBot:_send_stories(chat_id, username, stories)
+    local profile_url = self._instagram_service:toprofileurl(username)
+    if not stories or not next(stories) then
+        self._api.send_message(chat_id, "No stories for "..profile_url)
+        return
+    end
+    for _, story in pairs(stories) do
+        if story.type == "image" then
+            self._api.send_photo(chat_id, story.url, profile_url.." story")
+        elseif story.type == "video" then
+            self._api.send_video(chat_id, story.url, profile_url.." story")
+        else
+            log.warn("Wrong story type: "..story.type.." of the @"..username)
+        end
+    end
 end
 
 return TelegramBot
