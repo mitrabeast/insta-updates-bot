@@ -54,11 +54,26 @@ function InstagramService:get_photos(username)
     end
     local photo_urls = {}
     for _, photo in pairs(photos.medias) do
-        if photo.node.display_url and photo.node.taken_at_timestamp and not photo.node.is_video then
-            table.insert(photo_urls, {
-                url = photo.node.display_url,
-                photo_date = photo.node.taken_at_timestamp
-            })
+        if photo.node.taken_at_timestamp and not photo.node.is_video then
+            -- Add all photo urls if there are some photos in a post.
+            if photo.node.edge_sidecar_to_children and photo.node.edge_sidecar_to_children.edges then
+                for _, edge in pairs(photo.node.edge_sidecar_to_children.edges) do
+                    if edge.node and edge.node.display_url and not edge.node.is_video then
+                        table.insert(photo_urls, {
+                            url = edge.node.display_url,
+                            photo_date = photo.node.taken_at_timestamp
+                        })
+                    end
+                end
+            -- Add one photo url if there are no more photos in a post.
+            elseif photo.node.display_url then
+                table.insert(photo_urls, {
+                    url = photo.node.display_url,
+                    photo_date = photo.node.taken_at_timestamp
+                })
+            else
+                log.warn("Photo of @"..username.." has no display_url nor edge_sidecar_to_children property.")
+            end
         end
     end
     return photo_urls
@@ -66,6 +81,22 @@ end
 
 function InstagramService:get_stories(username)
     local stories = self:_api_request(self._stories_type, username)
+    if not stories or not stories.medias then
+        log.info("User stories of @"..username.." not found, or it's profile is closed.")
+        return nil
+    end
+    local stories_urls = {}
+    for _, story in pairs(stories.medias) do
+        if story.type and story.downloadUrl then
+            -- FIXME: calculate correct story_date
+            table.insert(stories_urls, {
+                url = story.downloadUrl,
+                ["type"] = story.type,
+                story_date = os.time()
+            })
+        end
+    end
+    return stories_urls
 end
 
 function InstagramService:_request(method, url, parameters, extra_headers)

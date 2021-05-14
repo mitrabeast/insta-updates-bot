@@ -32,6 +32,7 @@ function TelegramBot:start()
     local send_instagram_updates = self:_get_instagram_updates_sender()
     local process_telegram_updates = self:_get_telegram_updates_processor()
     while true do
+        -- FIXME: Add coroutines to respond faster to user's commands
         send_instagram_updates()
         process_telegram_updates()
     end
@@ -43,7 +44,8 @@ function TelegramBot:_get_instagram_updates_sender(start_time)
         local now = os.time()
         if now - last_update_time >= 60 then
             last_update_time = now
-            self._api.send_message("1204323514", 'Instagram Updates')
+            local chat_id = "1204323514"
+            local username = "olyashaasaxon"
         end
     end
 end
@@ -78,6 +80,15 @@ function TelegramBot:_on_message(message)
     elseif utils.starts_with(message.text, "/remove") then
         local username = utils.split(message.text)[2]
         self:_on_remove_command(message.chat.id, username)
+    elseif utils.starts_with(message.text, "/update") then
+        local username = utils.split(message.text)[2]
+        self:_on_update_command(message.chat.id, username)
+    elseif utils.starts_with(message.text, "/stories") then
+        local username = utils.split(message.text)[2]
+        self:_on_stories_command(message.chat.id, username)
+    elseif utils.starts_with(message.text, "/photos") then
+        local username = utils.split(message.text)[2]
+        self:_on_photos_command(message.chat.id, username)
     elseif utils.starts_with(message.text, "/help") then
         self:_on_help_command(message.chat.id)
     else
@@ -179,6 +190,50 @@ function TelegramBot:_on_remove_command(chat_id, username)
     end
 end
 
+function TelegramBot:_on_update_command(chat_id, username)
+    self:_on_photos_command(chat_id, username)
+    self:_on_stories_command(chat_id, username)
+end
+
+function TelegramBot:_on_stories_command(chat_id, username)
+    log.debug("Command /stories "..username.." from "..chat_id)
+    if not username then
+        self._api.send_message(chat_id, "No username parameter provided. Use /stories igusername format.")
+        return
+    end
+    local profile_url = self._instagram_service:toprofileurl(username)
+    local stories = self._instagram_service:get_stories(username)
+    if not stories or not next(stories) then
+        self._api.send_message(chat_id, "No stories for "..profile_url)
+        return
+    end
+    for _, story in pairs(stories) do
+        if story.type == "image" then
+            self._api.send_photo(chat_id, story.url, profile_url.." story")
+        elseif story.type == "video" then
+            self._api.send_video(chat_id, story.url, profile_url.." story")
+        else
+            log.warn("Wrong story type: "..story.type.." of the @"..username)
+        end
+    end
+end
+
+function TelegramBot:_on_photos_command(chat_id, username)
+    log.debug("Command /photos "..username.." from "..chat_id)
+    if not username then
+        self._api.send_message(chat_id, "No username parameter provided. Use /photos igusername format.")
+        return
+    end
+    local profile_url = self._instagram_service:toprofileurl(username)
+    local photos = self._instagram_service:get_photos(username)
+    if not photos or not next(photos) then
+        self._api.send_message(chat_id, "No photos for "..profile_url)
+    end
+    for _, photo in pairs(photos) do
+        self._api.send_photo(chat_id, photo.url, profile_url.." photo")
+    end
+end
+
 function TelegramBot:_on_help_command(chat_id)
     log.debug("Command /help from "..chat_id)
     self._api.send_message(
@@ -189,8 +244,19 @@ function TelegramBot:_on_help_command(chat_id)
         "/list - Show all observable Instagram accounts.\n"..
         "/add igusername - Begin observing igusername's Instagram account.\n"..
         "/remove igusername - Stop observing igusername's Instagram account.\n"..
+        "/update igusername - Force collect & send igusername's Instagram updates.\n"..
+        "/stories igusername - Get stories of igusername without observing!\n"..
+        "/photos igusername - Get photos of igusername without observing!\n"..
         "/help - Show this message."
     )
+end
+
+function TelegramBot:_collect_updates(chat_id, username)
+    -- body
+end
+
+function TelegramBot:_send_updates(chat_id, updates)
+    -- body
 end
 
 return TelegramBot
