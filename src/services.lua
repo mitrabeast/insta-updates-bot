@@ -26,6 +26,7 @@ function InstagramService:new()
 end
 
 function InstagramService:toprofileurl(username)
+    username = username or "no-username"
     return self._instagram_url.."/"..username.."/"
 end
 
@@ -57,16 +58,21 @@ function InstagramService:get_account(username)
         log.error("Error decoding account to JSON object: "..err)
         return nil
     end
+    log.debug("Got account object: "..utils.tabletostring(account_obj))
     local user = account_obj.user
     if not user then
         log.info("User @"..username.." not found, or it's profile is closed.")
         return nil
     end
-    account = {
+    local medias = account_obj.medias
+    local profile_picture
+    if medias then
+        profile_picture = medias[1]['downloadUrl']
+    end
+    return {
         username = user.username or username,
-        profile_picture = user["profilePicUrl"]
+        profile_picture = profile_picture
     }
-    return account
 end
 
 function InstagramService:get_photos(username)

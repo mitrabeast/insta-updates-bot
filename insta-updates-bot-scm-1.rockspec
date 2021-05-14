@@ -9,6 +9,7 @@ description = {
 }
 dependencies = {
    "telegram-bot-lua",
+   "luasocket",
    "pgmoon",
    "luaossl"
 }
