@@ -49,4 +49,12 @@ function utils.split(str)
    return splitted
 end
 
+function utils.hextochar(x)
+   return string.char(tonumber(x, 16))
+end
+
+function utils.unescape(url)
+   return url:gsub("%%(%x%x)", utils.hextochar)
+end
+
 return utils

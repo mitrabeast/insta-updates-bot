@@ -118,7 +118,7 @@ function TelegramBot:_on_list_command(chat_id)
     if accounts then
         local account_links = {}
         for _, account in pairs(accounts) do
-            table.insert(account_links, self._instagram_service.instagram_url.."/"..account.username.."/")
+            table.insert(account_links, self._instagram_service.toprofileurl(account.username))
         end
         log.info("List of observable Instagram accounts: "..utils.tabletostring(account_links))
         self._api.send_message(chat_id, "Observing:\n"..table.concat(account_links, "\n"))
@@ -141,11 +141,19 @@ function TelegramBot:_on_add_command(chat_id, username)
     if account then
         log.warn("Trying to add already observable account @"..username.." for chat "..chat_id)
         self._api.send_message(chat_id, "This account is already observable for this chat.")
-    else
-        -- TODO: check if username is correct
+        return
+    end
+    account = self._instagram_service:get_account(username)
+    if account then
         log.info("Adding @"..username.." to observable accounts list for chat "..chat_id)
         self._accounts_repo:create({chat_id = chat_id, username = username})
-        self._api.send_message(chat_id, "Account "..self._instagram_service.instagram_url.."/"..username.."/ added.")
+        self._api.send_message(chat_id, "Account "..self._instagram_service.toprofileurl(username).." added.")
+    else
+        log.warn("Trying to add wrong username @"..username.." or account is closed.")
+        self._api.send_message(
+            chat_id,
+            "Not found "..self._instagram_service.toprofileurl(username).." or account is closed."
+        )
     end
 end
 
@@ -161,7 +169,7 @@ function TelegramBot:_on_remove_command(chat_id, username)
         self._accounts_repo:delete({chat_id = chat_id, username = username})
         self._api.send_message(
             chat_id,
-            "Removed "..self._instagram_service.instagram_url.."/"..username.."/ from observable list."
+            "Removed "..self._instagram_service.toprofileurl(username).." from observable list."
         )
     else
         log.warn("Trying to remove not observable account @"..username.." for chat "..chat_id)
