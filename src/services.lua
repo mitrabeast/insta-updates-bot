@@ -31,56 +31,41 @@ function InstagramService:toprofileurl(username)
 end
 
 function InstagramService:get_account(username)
-    local token, xsrf_token, session = self:_get_token(self._profile_picture_url, username)
-    if not token then
-        log.error("Error getting token for "..username)
-        return nil
-    end
-    local url = self._service_url..self._ajax_url
-    local parameters = {
-        cursor = "1",
-        igtv_ids = "[]",
-        token = token,
-        ["type"] = self._profile_picture_type,
-        username = self:toprofileurl(username),
-    }
-    local extra_headers = {
-        ["Cookie"] = "instasaved_session="..session.."; XSRF-TOKEN="..xsrf_token,
-        ["X-XSRF-TOKEN"] = utils.unescape(xsrf_token)
-    }
-    local success, account = self:_request("POST", url, parameters, extra_headers)
-    if not success then
-        log.error("Error getting account of "..self:toprofileurl(username))
-        return nil
-    end
-    local account_obj, pos, err = json.decode(account, 1, nil)
-    if err then
-        log.error("Error decoding account to JSON object: "..err)
-        return nil
-    end
-    log.debug("Got account object: "..utils.tabletostring(account_obj))
-    local user = account_obj.user
-    if not user then
+    local account = self:_api_request(self._profile_picture_type, username)
+    if not account or not account.user then
         log.info("User @"..username.." not found, or it's profile is closed.")
         return nil
     end
-    local medias = account_obj.medias
     local profile_picture
-    if medias then
-        profile_picture = medias[1]['downloadUrl']
+    if account.medias then
+        profile_picture = account.medias[1]['downloadUrl']
     end
     return {
-        username = user.username or username,
+        username = account.user.username or username,
         profile_picture = profile_picture
     }
 end
 
 function InstagramService:get_photos(username)
-
+    local photos = self:_api_request(self._photos_type, username)
+    if not photos or not photos.medias then
+        log.info("User photos of @"..username.." not found, or it's profile is closed.")
+        return nil
+    end
+    local photo_urls = {}
+    for _, photo in pairs(photos.medias) do
+        if photo.node.display_url and photo.node.taken_at_timestamp and not photo.node.is_video then
+            table.insert(photo_urls, {
+                url = photo.node.display_url,
+                photo_date = photo.node.taken_at_timestamp
+            })
+        end
+    end
+    return photo_urls
 end
 
 function InstagramService:get_stories(username)
-
+    local stories = self:_api_request(self._stories_type, username)
 end
 
 function InstagramService:_request(method, url, parameters, extra_headers)
@@ -117,7 +102,7 @@ function InstagramService:_request(method, url, parameters, extra_headers)
     end
 end
 
-function InstagramService:_get_token(url_type, username)
+function InstagramService:_fetch_credentials(url_type, username)
     local url = self._service_url..url_type.."/"..username
     local success, page, headers = self:_request("GET", url)
     if not success then
@@ -125,15 +110,60 @@ function InstagramService:_get_token(url_type, username)
         return nil
     end
     local cookies = headers["set-cookie"]
-    local xsrf_token = "no-xsrf-token"
-    local session = "no-session"
+    local xsrf_token
+    local session
     if cookies then
-        xsrf_token = cookies:match("XSRF%-TOKEN=(.-);") or xsrf_token
-        session = cookies:match("instasaved_session=(.-);") or session
+        xsrf_token = cookies:match("XSRF%-TOKEN=(.-);")
+        session = cookies:match("instasaved_session=(.-);")
     end
     local token = page:match('%<input type="hidden" name="token" id="token" value="(.-)%">')
-    log.debug("Got token "..token..", session "..session .." and xsrf-token "..xsrf_token.." for "..username)
+    log.debug(
+        "Got token "..tostring(token)..", session "..tostring(session)..
+        " and xsrf-token "..tostring(xsrf_token).." for "..username
+    )
     return token, xsrf_token, session
+end
+
+function InstagramService:_api_request(request_type, username)
+    local request_type_url
+    if request_type == self._profile_picture_type then
+        request_type_url = self._profile_picture_url
+    elseif request_type == self._photos_type then
+        request_type_url = self._photos_url
+    elseif request_type == self._stories_type then
+        request_type_url = self._stories_url
+    else
+        log.error("Wrong request type: "..request_type)
+        return nil
+    end
+    local token, xsrf_token, session = self:_fetch_credentials(request_type_url, username)
+    if not token or not xsrf_token or not session then
+        log.error("Error fetching credentials for "..username)
+        return nil
+    end
+    local url = self._service_url..self._ajax_url
+    local parameters = {
+        cursor = "1",
+        igtv_ids = "[]",
+        token = token,
+        ["type"] = request_type,
+        username = self:toprofileurl(username),
+    }
+    local extra_headers = {
+        ["Cookie"] = "instasaved_session="..session.."; XSRF-TOKEN="..xsrf_token,
+        ["X-XSRF-TOKEN"] = utils.unescape(xsrf_token)
+    }
+    local success, data = self:_request("POST", url, parameters, extra_headers)
+    if not success then
+        log.error("Error getting data from ajax request "..self:toprofileurl(username))
+        return nil
+    end
+    local obj, _, err = json.decode(data, 1, nil)
+    if err then
+        log.error("Error decoding account to JSON object: "..err)
+        return nil
+    end
+    return obj
 end
 
 _M.InstagramService = InstagramService
