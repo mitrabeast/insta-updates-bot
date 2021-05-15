@@ -46,8 +46,8 @@ function Storage:query(query, params)
     local escaped_params = {}
     for _, value in pairs(params) do
         if type(value) == "string" then
-            local escaped_param = self._database:escape_literal(tostring(value))
-            table.insert(escaped_params, escaped_param)
+            local escaped_value = self._database:escape_literal(value)
+            table.insert(escaped_params, escaped_value)
         else
             table.insert(escaped_params, value)
         end

@@ -39,20 +39,33 @@ function TelegramBot:start()
     local process_telegram_updates = self:_get_telegram_updates_processor()
     while true do
         -- FIXME: Add coroutines to respond faster to user's commands
-        -- send_instagram_updates()
         process_telegram_updates()
+        send_instagram_updates()
     end
 end
 
-function TelegramBot:_get_instagram_updates_sender(start_time)
+function TelegramBot:_get_instagram_updates_sender(timeout, start_time)
+    timeout = timeout or (60 * 60)
     local last_update_time = tonumber(start_time) ~= nil and start_time or os.time()
     return function ()
         local now = os.time()
-        if now - last_update_time >= 60 then
+        if now - last_update_time >= timeout then
             last_update_time = now
-            local chat_id = "1204323514"
-            local username = "olyashaasaxon"
-            -- TODO: implement
+            local users = self._user_repo:retrieve({})
+            if not users then
+                log.warn("Unable to send updates: no users registered.")
+                return
+            end
+            for _, user in pairs(users) do
+                local accounts = self._accounts_repo:retrieve({chat_id = user.chat_id})
+                if accounts then
+                    for _, account in pairs(accounts) do
+                        log.info("Collecting & sending updates to chat "..user.chat_id.." of the @"..account.username)
+                        local updates = self:_collect_updates(user.chat_id, account.username)
+                        self:_send_updates(user.chat_id, account.username, updates)
+                    end
+                end
+            end
         end
     end
 end
@@ -186,6 +199,8 @@ function TelegramBot:_on_remove_command(chat_id, username)
     local account = self._accounts_repo:retrieve({chat_id = chat_id, username = username})
     if account then
         log.info("Removing @"..username.." from observable accounts list for chat "..chat_id)
+        self._stories_repo:delete({chat_id = chat_id, username = username})
+        self._photos_repo:delete({chat_id = chat_id, username = username})
         self._accounts_repo:delete({chat_id = chat_id, username = username})
         self._api.send_message(
             chat_id,
@@ -272,11 +287,11 @@ function TelegramBot:_send_updates(chat_id, username, updates)
     end
     for update_type, update in pairs(updates) do
         if update_type == "photos" then
-            self:_send_photos(chat_id, username, update.data)
+            self:_send_photos(chat_id, username, update)
         elseif update_type == "stories" then
-            self:_send_stories(chat_id, username, update.data)
+            self:_send_stories(chat_id, username, update)
         else
-            log.warn("Wrong update type: "..update.type)
+            log.warn("Wrong update type: "..update_type)
         end
     end
 end
@@ -285,6 +300,7 @@ function TelegramBot:_send_photos(chat_id, username, photos)
     local profile_url = self._instagram_service:toprofileurl(username)
     if not photos or not next(photos) then
         self._api.send_message(chat_id, "No photos for "..profile_url)
+        return
     end
     for _, photo in pairs(photos) do
         self._api.send_photo(chat_id, photo.url, profile_url.." photo")

@@ -45,14 +45,17 @@ function UserRepository:create(params)
 end
 
 function UserRepository:retrieve(params)
-    if type(params) ~= "table" or not params.chat_id then return nil end
-    local chat_id = tostring(params.chat_id)
-    local result, err = self._storage:query("select * from tgusers where chat_id=%s", {chat_id})
+    if type(params) ~= "table" then return nil end
+    local query_config = {"select * from tgusers", {}}
+    if params.chat_id then
+        query_config = {"select * from tgusers where chat_id=%s", {tostring(params.chat_id)}}
+    end
+    local result, err = self._storage:query(table.unpack(query_config))
     if result then
-        log.debug("Retrieved user "..utils.tabletostring(result).." by chat id "..chat_id)
+        log.debug("Retrieved user(s) "..utils.tabletostring(result))
         if next(result) == nil then return nil else return result end
     else
-        log.error("Error retrieving user by chat id "..chat_id..": "..err)
+        log.error("Error retrieving user(s): "..err)
         return nil
     end
 end
@@ -171,6 +174,21 @@ function PhotosRepository:retrieve(params)
     end
 end
 
+function PhotosRepository:delete(params)
+    if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
+    local chat_id = tostring(params.chat_id)
+    local username = params.username
+    local result, err = self._storage:query(
+        "delete from igphotos where tguser_id=%s and username=%s",
+        {chat_id, username}
+    )
+    if result then
+        log.debug("Removed Instagram photos of @"..username.." of chat "..chat_id)
+    else
+        log.error("Error removing Instagram photos of @"..username.." of chat"..chat_id..": "..err)
+    end
+end
+
 local StoriesRepository = Repository:new()
 
 function StoriesRepository:create(params)
@@ -215,6 +233,21 @@ function StoriesRepository:retrieve(params)
     else
         log.error("Error retrieving Instagram stories by chat id "..chat_id.." and username "..username..": "..err)
         return nil
+    end
+end
+
+function StoriesRepository:delete(params)
+    if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
+    local chat_id = tostring(params.chat_id)
+    local username = params.username
+    local result, err = self._storage:query(
+        "delete from igstories where tguser_id=%s and username=%s",
+        {chat_id, username}
+    )
+    if result then
+        log.debug("Removed Instagram stories of @"..username.." of chat "..chat_id)
+    else
+        log.error("Error removing Instagram stories of @"..username.." of chat"..chat_id..": "..err)
     end
 end
 
