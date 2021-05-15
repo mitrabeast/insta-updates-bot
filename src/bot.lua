@@ -198,9 +198,28 @@ function TelegramBot:_on_remove_command(chat_id, username)
 end
 
 function TelegramBot:_on_update_command(chat_id, username)
-    -- TODO: implement correctly
-    self:_on_photos_command(chat_id, username)
-    self:_on_stories_command(chat_id, username)
+    log.debug("Command /update "..username.." from "..chat_id)
+    if not username then
+        self._api.send_message(chat_id, "No username parameter provided. Use /update igusername format.")
+        return
+    end
+    local account = self._user_repo:retrieve({chat_id = chat_id, username = username})
+    if not account then
+        log.warn("Trying to update data of @"..username.." without subscription from chat "..chat_id)
+        self._api.send_message(chat_id, "You are not subscribed to this account. Use /add "..username.." command.")
+    end
+    local stories = self._updates_service:collect_story_updates(chat_id, username)
+    if next(stories) then
+        self:_send_stories(chat_id, username, stories)
+    else
+        self._api.send_message(chat_id, "No new stories.")
+    end
+    local photos = self._updates_service:collect_photo_updates(chat_id, username)
+    if next(photos) then
+        self:_send_photos(chat_id, username, photos)
+    else
+        self._api.send_message(chat_id, "No new photos.")
+    end
 end
 
 function TelegramBot:_on_stories_command(chat_id, username)

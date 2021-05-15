@@ -31,7 +31,7 @@ local UserRepository = Repository:new()
 
 function UserRepository:create(params)
     if type(params) ~= "table" or not params.chat_id then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local username = params.username or "Anonymous"
     local result, err = self._storage:query(
         "insert into tgusers (chat_id, username) values (%s, %s)",
@@ -46,7 +46,7 @@ end
 
 function UserRepository:retrieve(params)
     if type(params) ~= "table" or not params.chat_id then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local result, err = self._storage:query("select * from tgusers where chat_id=%s", {chat_id})
     if result then
         log.debug("Retrieved user "..utils.tabletostring(result).." by chat id "..chat_id)
@@ -59,7 +59,7 @@ end
 
 function UserRepository:delete(params)
     if type(params) ~= "table" or not params.chat_id then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local result, err = self._storage:query(
         "delete from tgusers where chat_id=%s",
         {chat_id}
@@ -75,7 +75,7 @@ local AccountsRepository = Repository:new()
 
 function AccountsRepository:create(params)
     if type(params) ~= "table" or not params.chat_id then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local username = params.username
     local result, err = self._storage:query(
         "insert into igaccounts (tguser_id, username) values (%s, %s)",
@@ -90,7 +90,7 @@ end
 
 function AccountsRepository:retrieve(params)
     if type(params) ~= "table" or not params.chat_id then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local username = params.username
     local query
     if username then
@@ -110,7 +110,7 @@ end
 
 function AccountsRepository:delete(params)
     if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local username = params.username
     local result, err = self._storage:query(
         "delete from igaccounts where tguser_id=%s and username=%s",
@@ -126,13 +126,14 @@ end
 local PhotosRepository = Repository:new()
 
 function PhotosRepository:create(params)
-    if type(params) ~= "table" or not params.chat_id or params.username then return nil end
-    local chat_id = params.chat_id
+    if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
+    local chat_id = tostring(params.chat_id)
     local username = params.username
-    local photo_date = params.photo_date
+    local photo_date = tonumber(params.photo_date)
     local url = params.url
     local result, err = self._storage:query(
-        "insert into igphotos (tguser_id, photo_date, url, username) values (%s, %s, %s, %s)",
+        "insert into igphotos (tguser_id, photo_date, url, username) "..
+        "values (%s, to_timestamp(%d::bigint)::timestamp, %s, %s)",
         {chat_id, photo_date, url, username}
     )
     if result then
@@ -144,24 +145,25 @@ end
 
 function PhotosRepository:retrieve(params)
     if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local username = params.username
-    local photo_date = params.photo_date
+    local photo_date = tonumber(params.photo_date)
     local page = params.page or 1
     local page_size = params.page_size or 10
     local query_config = {
-        "select * from igphotos where chat_id=%s and username=%s order by photo_date desc limit %d offset %d",
+        "select * from igphotos where tguser_id=%s and username=%s order by photo_date desc limit %d offset %d",
         {chat_id, username, page_size, page}
     }
     if photo_date then
         query_config = {
-            "select * from igphotos where chat_id=%s and username=%s and photo_date=%s",
+            "select * from igphotos where tguser_id=%s and username=%s "..
+            "and photo_date=to_timestamp(%d::bigint)::timestamp",
             {chat_id, username, photo_date}
         }
     end
     local result, err = self._storage:query(table.unpack(query_config))
     if result then
-        log.debug("Retrieved Instagram photos: "..utils.tabletostring(result).." by chat id "..username)
+        log.debug("Retrieved Instagram photos: "..utils.tabletostring(result).." for @"..username)
         if next(result) == nil then return nil else return result end
     else
         log.error("Error retrieving Instagram photos by chat id "..username..": "..err)
@@ -173,12 +175,13 @@ local StoriesRepository = Repository:new()
 
 function StoriesRepository:create(params)
     if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local username = params.username
-    local story_date = params.story_date
+    local story_date = tonumber(params.story_date)
     local url = params.url
     local result, err = self._storage:query(
-        "insert into igstories (tguser_id, story_date, url, username) values (%s, %s, %s, %s)",
+        "insert into igstories (tguser_id, story_date, url, username) "..
+        "values (%s, to_timestamp(%d::bigint)::timestamp, %s, %s)",
         {chat_id, story_date, url, username}
     )
     if result then
@@ -190,18 +193,18 @@ end
 
 function StoriesRepository:retrieve(params)
     if type(params) ~= "table" or not params.chat_id or not params.username then return nil end
-    local chat_id = params.chat_id
+    local chat_id = tostring(params.chat_id)
     local username = params.username
     local url = params.url
     local page = params.page or 1
     local page_size = params.page_size or 10
     local query_config = {
-        "select * from igstories where chat_id=%s and username=%s order by story_date desc limit %d offset %d",
+        "select * from igstories where tguser_id=%s and username=%s order by story_date desc limit %d offset %d",
         {chat_id, username, page_size, page}
     }
     if url then
         query_config = {
-            "select * from igstories where chat_id=%s and username=%s and url=%s",
+            "select * from igstories where tguser_id=%s and username=%s and url=%s",
             {chat_id, username, url}
         }
     end
@@ -210,7 +213,7 @@ function StoriesRepository:retrieve(params)
         log.debug("Retrieved Instagram stories: "..utils.tabletostring(result).." by chat id "..chat_id)
         if next(result) == nil then return nil else return result end
     else
-        log.error("Error retrieving Instagram stories by chat id "..chat_id.." and username"..username..": "..err)
+        log.error("Error retrieving Instagram stories by chat id "..chat_id.." and username "..username..": "..err)
         return nil
     end
 end
